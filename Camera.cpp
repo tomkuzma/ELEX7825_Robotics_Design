@@ -11,6 +11,7 @@ CCamera::CCamera()
 {
 	// Initialize with a default camera image size 
 	init(Size(1000, 600));
+
 }
 
 CCamera::~CCamera()
