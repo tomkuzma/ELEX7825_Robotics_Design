@@ -31,7 +31,30 @@ CRobot::~CRobot()
 // Create Homogeneous Transformation Matrix
 Mat CRobot::createHT(Vec3d t, Vec3d r)
 {
-	return (Mat1f(4, 4) << 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+	// constants
+	const double conv = 3.14159265358979323846/180;
+	const double alpha = r[2] * conv;
+	const double beta = r[1] * conv;
+	const double gamma = r[0] * conv;
+	const double sa = sin(alpha);
+	const double sb = sin(beta);
+	const double sg = sin(gamma);
+	const double ca = cos(alpha);
+	const double cb = cos(beta);
+	const double cg = cos(gamma);
+
+	// matrix value calculations
+	double a = ca * cb;
+	double b = (ca * sb * sg) - (sa * cg);
+	double c = (ca * sb * cg) + (sa * sg);
+	double d = sa * cb;
+	double e = (sa * sb * sg) + (ca * cg);
+	double f = (sa * sb * cg) - (ca * sg);
+	double g = -(sb);
+	double h = cb * sg;
+	double i = cb * cg;
+
+	return ((Mat1f(4, 4) << a, b, c, t[0], d, e, f, t[1], g, h, i, t[2], 0, 0, 0, 1));
 }
 
 std::vector<Mat> CRobot::createBox(float w, float h, float d)
@@ -82,7 +105,7 @@ void CRobot::drawBox(Mat& im, std::vector<Mat> box3d, Scalar colour)
 	float draw_box1[] = { 0,1,2,3,4,5,6,7,0,1,2,3 };
 	float draw_box2[] = { 1,2,3,0,5,6,7,4,4,5,6,7 };
 
-	_virtualcam.transform_to_image(box3d, box2d);
+	_virtualcam.transform_to_image(box3d, box2d); 
 
 	for (int i = 0; i < 12; i++)
 	{
@@ -97,28 +120,64 @@ void CRobot::drawCoord(Mat& im, std::vector<Mat> coord3d)
 {
 	Point2f O, X, Y, Z;
 
+	// transform 3D points to 2D on camera plane
 	_virtualcam.transform_to_image(coord3d.at(0), O);
 	_virtualcam.transform_to_image(coord3d.at(1), X);
 	_virtualcam.transform_to_image(coord3d.at(2), Y);
 	_virtualcam.transform_to_image(coord3d.at(3), Z);
 
+	// connect points with lines
 	line(im, O, X, CV_RGB(255, 0, 0), 1); // X=RED
 	line(im, O, Y, CV_RGB(0, 255, 0), 1); // Y=GREEN
 	line(im, O, Z, CV_RGB(0, 0, 255), 1); // Z=BLUE
+	
 }
 
 void CRobot::create_simple_robot()
 {
+	// create 5 boxes for robot
+	std::vector <Mat> bottom = createBox(0.05, 0.05, 0.05);
+	std::vector <Mat> middle = createBox(0.05, 0.05, 0.05);
+	std::vector <Mat> left = createBox(0.05, 0.05, 0.05);
+	std::vector <Mat> right = createBox(0.05, 0.05, 0.05);
+	std::vector <Mat> head = createBox(0.05, 0.05, 0.05);
 
+	// transform boxes to their positions
+	transformPoints(middle, createHT(Vec3d(0, 0.05, 0), Vec3d(0, 0, 0)));
+	transformPoints(left, createHT(Vec3d(-0.05, 0.1, 0), Vec3d(0, 0, 0)));
+	transformPoints(right, createHT(Vec3d(0.05, 0.1, 0), Vec3d(0, 0, 0)));
+	transformPoints(head, createHT(Vec3d(0, 0.15, 0), Vec3d(0, 0, 0)));
+
+	// push onto Mat vector member
+	_simple_robot.push_back(bottom);
+	_simple_robot.push_back(middle);
+	_simple_robot.push_back(left);
+	_simple_robot.push_back(right);
+	_simple_robot.push_back(head);
+	
 }
 
 void CRobot::draw_simple_robot()
 {
+	// Create BG mat
 	_canvas = cv::Mat::zeros(_image_size, CV_8UC3) + CV_RGB(60, 60, 60);
 
+	// create world coordinates
 	std::vector<Mat> O = createCoord();
 
+	// draw coorditate
+	drawCoord(_canvas, O);
+
+	// draw robot boxes
+	drawBox(_canvas, _simple_robot.at(0), CV_RGB(255, 0, 0));
+	drawBox(_canvas, _simple_robot.at(1), CV_RGB(0, 255, 0));
+	drawBox(_canvas, _simple_robot.at(2), CV_RGB(0, 0, 255));
+	drawBox(_canvas, _simple_robot.at(3), CV_RGB(0, 0, 255));
+	drawBox(_canvas, _simple_robot.at(4), CV_RGB(255, 0, 255));
+
+	// update camera
 	_virtualcam.update_settings(_canvas);
 
+	// show image in window
 	cv::imshow(CANVAS_NAME, _canvas);
 }

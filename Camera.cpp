@@ -27,11 +27,11 @@ void CCamera::init (Size image_size)
 
 	_cam_setting_x = 0; // units in mm
 	_cam_setting_y = 0; // units in mm
-	_cam_setting_z = 0; // units in mm
+	_cam_setting_z = 500; // units in mm
 
 	_cam_setting_roll = 0; // units in degrees
-	_cam_setting_pitch = 0; // units in degrees
-	_cam_setting_yaw = 0; // units in degrees
+	_cam_setting_pitch = 180; // units in degrees
+	_cam_setting_yaw = 180; // units in degrees
 
 	//////////////////////////////////////
 	// Virtual Camera intrinsic
@@ -51,12 +51,40 @@ void CCamera::init (Size image_size)
 
 void CCamera::calculate_intrinsic()
 {
-	//_cam_virtual_intrinsic = (Mat1f(3, 4) << (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0));
+	// matrix const
+	const float a = (_cam_setting_f / (1000 * _pixel_size ));
+
+	// populate intrinsic matrix
+	_cam_virtual_intrinsic = ((Mat1f(3, 4) << a, 0, _principal_point.x, 0, 0, a, _principal_point.y, 0, 0, 0, 1, 0));
 }
 
 void CCamera::calculate_extrinsic()
 {
-	//_cam_virtual_extrinsic = (Mat1f(4, 4) << (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1));
+	// constants
+	const double conv = 3.14159265358979323846 / 180;
+	const double alpha = _cam_setting_yaw * conv;
+	const double beta = _cam_setting_pitch * conv;
+	const double gamma = _cam_setting_roll * conv;
+	const double sa = sin(alpha);
+	const double sb = sin(beta);
+	const double sg = sin(gamma);
+	const double ca = cos(alpha);
+	const double cb = cos(beta);
+	const double cg = cos(gamma);
+
+	// matrix value calculations
+	double a = ca * cb;
+	double b = (ca * sb * sg) - (sa * cg);
+	double c = (ca * sb * cg) + (sa * sg);
+	double d = sa * cb;
+	double e = (sa * sb * sg) + (ca * cg);
+	double f = (sa * sb * cg) - (ca * sg);
+	double g = -(sb);
+	double h = cb * sg;
+	double i = cb * cg;
+
+	// populate extrinsic matrix
+	_cam_virtual_extrinsic = (Mat1f(4, 4) << a, b, c, float(_cam_setting_x) / 1000, d, e, f, float(_cam_setting_y) / 1000, g, h, i, float(_cam_setting_z) / 1000, 0, 0, 0, 1);
 }
 
 bool CCamera::save_camparam(string filename, Mat& cam, Mat& dist)
@@ -275,10 +303,29 @@ void CCamera::calibrate_board(int cam_id)
 
 void CCamera::transform_to_image(Mat pt3d_mat, Point2f& pt)
 {
+	// calculate homogeneous point from camera transform
+	Mat C = _cam_virtual_intrinsic * _cam_virtual_extrinsic * pt3d_mat;
+	Point3d P = C.clone(); // cast to Point
+	
+	// projection calc for 2D point
+	pt.x = int(P.x / P.z);
+	pt.y = int(P.y / P.z);
+
 }
 
 void CCamera::transform_to_image(std::vector<Mat> pts3d_mat, std::vector<Point2f>& pts2d)
 {
+	// calculate camera transformation matrix
+	Mat C = _cam_virtual_intrinsic * _cam_virtual_extrinsic;
+	Mat P; // for pushing points onto vector
+
+	for (int i = 0; i < pts3d_mat.size(); i++) {
+		P = C * pts3d_mat.at(i);
+		Point3d Pts = P.clone();
+
+		pts2d.push_back(Point2f(int(Pts.x / Pts.z), int(Pts.y / Pts.z)));
+
+	}
 }
 
 void CCamera::update_settings(Mat &im)
