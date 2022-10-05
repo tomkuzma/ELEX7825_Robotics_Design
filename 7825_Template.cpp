@@ -1,6 +1,7 @@
 ////////////////////////////////////////////////////////////////
 // ELEX 7825 Template project for BCIT
 // Created Sept 9, 2020 by Craig Hennessey
+// Edited by Tom Kuzma
 // Last updated September 26, 2022
 ////////////////////////////////////////////////////////////////
 #include "stdafx.h"
@@ -11,7 +12,7 @@ using namespace cv;
 using namespace dnn;
 using namespace aruco;
 
-#include <opencv2/face/facemark.hpp>
+#include "opencv/include/opencv2/face/facemark.hpp"
 
 // Add simple GUI elements
 #define CVUI_DISABLE_COMPILATION_NOTICES
@@ -42,6 +43,7 @@ void lab3(int cam_id)
     robot.draw_simple_robot();
     exit_key = waitKey(10);
   }
+  destroyAllWindows();
 }
 
 void lab4(int cam_id)
