@@ -1,6 +1,7 @@
 #pragma once
 
 #include <opencv2/opencv.hpp>
+#include <opencv2/aruco/charuco.hpp>
 
 using namespace std;
 using namespace cv;
@@ -31,12 +32,14 @@ private:
 	int _cam_setting_pitch;
 	int _cam_setting_yaw;
 
+
+
+public:
 	// Real webcam
 	Mat _cam_real_intrinsic;
 	Mat _cam_real_extrinsic;
 	Mat _cam_real_dist_coeff;
 
-public:
 	void init(Size image_size);
 
 	bool save_camparam(string filename, Mat& cam, Mat& dist);
@@ -49,5 +52,12 @@ public:
 	void transform_to_image(std::vector<Mat> pts3d_mat, std::vector<Point2f>& pts2d);
 
 	void update_settings(Mat &im);
+
+	void detectCharucoBoardWithCalibrationPose();
+
+	bool transform_charuco(VideoCapture vid, Mat im, vector <Vec3d> &rtvec);
+
+	Mat get_intrinsic();
+	Mat get_extrinsic();
 };
 

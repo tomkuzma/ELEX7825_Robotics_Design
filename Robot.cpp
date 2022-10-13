@@ -11,7 +11,7 @@ CRobot::CRobot()
 {
 	//////////////////////////////////////
 	// Create image and window for drawing
-	_image_size = Size(1000, 600);
+	_image_size = Size(1280, 720);
 
 	_canvas = cv::Mat::zeros(_image_size, CV_8UC3);
 	cv::namedWindow(CANVAS_NAME);
@@ -116,6 +116,46 @@ void CRobot::drawBox(Mat& im, std::vector<Mat> box3d, Scalar colour)
 	}
 }
 
+void CRobot::drawBox2(Mat& im, std::vector <vector<Mat>> box3d, Scalar colour)
+{
+	std::vector<Point2f> box2d;
+	std::vector <Point3f> box3dVec;
+	std::vector <Vec3d> r_tvect;
+
+	// The 12 lines connecting all vertexes 
+	float draw_box1[] = { 0,1,2,3,4,5,6,7,0,1,2,3 };
+	float draw_box2[] = { 1,2,3,0,5,6,7,4,4,5,6,7 };
+
+	if (_virtualcam.transform_charuco(_inputVideo, _canvas, r_tvect))
+	{
+		Mat extrin_re = _virtualcam.get_extrinsic();
+		Mat intrin_re = _virtualcam.get_intrinsic();
+
+		for (int boxindex = 0; boxindex < box3d.size(); boxindex++)
+		{
+			// convert box3d Mat to Point3f
+			for (int pointindex = 0; pointindex < box3d.at(boxindex).size(); pointindex++)
+				box3dVec.push_back(Point3f{ box3d.at(boxindex).at(pointindex).at<float>(0),box3d.at(boxindex).at(pointindex).at<float>(1), box3d.at(boxindex).at(pointindex).at<float>(2)});
+					
+			// get 2d points
+			projectPoints(box3dVec, r_tvect.at(0), r_tvect.at(1), intrin_re, extrin_re, box2d);
+
+			// draw lines between 2D box points
+			for (int i = 0; i < 12; i++)
+			{
+				Point pt1 = box2d.at(draw_box1[i]);
+				Point pt2 = box2d.at(draw_box2[i]);
+
+				line(im, pt1, pt2, colour, 2);
+			}
+
+			box3dVec.clear(); // clear 3D point vector for next box
+		}
+
+	}
+
+}
+
 void CRobot::drawCoord(Mat& im, std::vector<Mat> coord3d)
 {
 	Point2f O, X, Y, Z;
@@ -131,6 +171,13 @@ void CRobot::drawCoord(Mat& im, std::vector<Mat> coord3d)
 	line(im, O, Y, CV_RGB(0, 255, 0), 1); // Y=GREEN
 	line(im, O, Z, CV_RGB(0, 0, 255), 1); // Z=BLUE
 	
+}
+
+void CRobot::start_vidcap()
+{
+	_inputVideo.open(0);
+	_inputVideo.set(cv::CAP_PROP_FRAME_WIDTH, 1280);
+	_inputVideo.set(cv::CAP_PROP_FRAME_HEIGHT, 720);
 }
 
 void CRobot::create_simple_robot()
@@ -179,5 +226,58 @@ void CRobot::draw_simple_robot()
 	_virtualcam.update_settings(_canvas);
 
 	// show image in window
+	cv::imshow(CANVAS_NAME, _canvas);
+
+}
+
+void CRobot::create_aruco_robot()
+{
+	// create 5 boxes for robot
+	std::vector <Mat> bottom = createBox(0.05, 0.05, 0.05);
+	std::vector <Mat> middle = createBox(0.05, 0.05, 0.05);
+	std::vector <Mat> left = createBox(0.05, 0.05, 0.05);
+	std::vector <Mat> right = createBox(0.05, 0.05, 0.05);
+	std::vector <Mat> head = createBox(0.05, 0.05, 0.05);
+
+	// transform boxes to their positions
+	transformPoints(middle, createHT(Vec3d(0, 0, 0.05), Vec3d(0, 0, 0)));
+	transformPoints(left, createHT(Vec3d(-0.05, 0, 0.1), Vec3d(0, 0, 0)));
+	transformPoints(right, createHT(Vec3d(0.05, 0, 0.1), Vec3d(0, 0, 0)));
+	transformPoints(head, createHT(Vec3d(0, 0, 0.15), Vec3d(0, 0, 0)));
+
+	// push onto Mat vector member
+	_simple_robot.push_back(bottom);
+	_simple_robot.push_back(middle);
+	_simple_robot.push_back(left);
+	_simple_robot.push_back(right);
+	_simple_robot.push_back(head);
+}
+
+void CRobot::draw_aruco_robot()
+{
+	float deg = 1;
+
+	_canvas = cv::Mat::zeros(_image_size, CV_8UC3) + CV_RGB(60, 60, 60);
+	Mat flipped;
+
+	// rotate boxes
+	transformPoints(_simple_robot.at(0), createHT(Vec3d(0, 0, 0), Vec3d(0, 0, deg)));
+	transformPoints(_simple_robot.at(1), createHT(Vec3d(0, 0, 0), Vec3d(0, 0, deg)));
+	transformPoints(_simple_robot.at(2), createHT(Vec3d(0, 0, 0), Vec3d(0, 0, deg)));
+	transformPoints(_simple_robot.at(3), createHT(Vec3d(0, 0, 0), Vec3d(0, 0, deg)));
+	transformPoints(_simple_robot.at(4), createHT(Vec3d(0, 0, 0), Vec3d(0, 0, deg)));
+
+	// draw boxes on board pose
+	drawBox2(_canvas, _simple_robot, CV_RGB(255, 0, 0));
+
+	// flip image horizontally
+	flip(_canvas, _canvas, 1);
+
+	// update trackbars
+	_virtualcam.update_settings(_canvas);
+
+	// increment rotation
+	deg += 1;
+
 	cv::imshow(CANVAS_NAME, _canvas);
 }

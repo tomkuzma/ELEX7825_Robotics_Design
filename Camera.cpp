@@ -10,7 +10,7 @@
 CCamera::CCamera()
 {
 	// Initialize with a default camera image size 
-	init(Size(1000, 600));
+	init(Size(1280, 720));
 
 }
 
@@ -40,6 +40,7 @@ void CCamera::init (Size image_size)
 
 	_pixel_size = 0.0000046; // Units of m
 	_principal_point = Point2f(image_size / 2);
+	/*load_camparam("cam_param.xml", _cam_real_intrinsic, _cam_real_dist_coeff);*/
 	
 	calculate_intrinsic();
 
@@ -47,6 +48,8 @@ void CCamera::init (Size image_size)
 	// Virtual Camera Extrinsic
 
 	calculate_extrinsic();
+
+	load_camparam("cam_param.xml", _cam_real_intrinsic, _cam_real_dist_coeff);
 }
 
 void CCamera::calculate_intrinsic()
@@ -144,8 +147,8 @@ void CCamera::calibrate_board(int cam_id)
 	Size board_size = Size(5, 7);
 	int dictionary_id = aruco::DICT_6X6_250;
   
-	float size_aruco_square = 0; // MEASURE THESE
-	float size_aruco_mark = 0; // MEASURE THESE
+	float size_aruco_square = 34.63/1000; // MEASURE THESE
+	float size_aruco_mark = 20.7/1000; // MEASURE THESE
 
 	Ptr<aruco::DetectorParameters> detectorParams = aruco::DetectorParameters::create();
 	Ptr<aruco::Dictionary> dictionary = aruco::getPredefinedDictionary(aruco::PREDEFINED_DICTIONARY_NAME(dictionary_id));
@@ -377,7 +380,119 @@ void CCamera::update_settings(Mat &im)
 
 	//////////////////////////////
 	// Update camera model
-
+	/*_cam_setting_pitch++;
+	_cam_setting_roll++;
+	_cam_setting_yaw++;*/
 	calculate_intrinsic();
 	calculate_extrinsic();
 }
+
+void CCamera::detectCharucoBoardWithCalibrationPose()
+{
+	cv::VideoCapture inputVideo;
+	inputVideo.open(0);
+	inputVideo.set(cv::CAP_PROP_FRAME_WIDTH, 1280);
+	inputVideo.set(cv::CAP_PROP_FRAME_HEIGHT, 720);
+
+	//cv::Mat _cam_real_intrinsic, _cam_real_dist_coeff;
+	std::string filename = "calib.txt";
+	bool readOk = load_camparam("cam_param.xml", _cam_real_intrinsic, _cam_real_dist_coeff);
+	if (!readOk) {
+		std::cerr << "Invalid camera file" << std::endl;
+	}
+	else {
+		cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
+		cv::Ptr<cv::aruco::CharucoBoard> board = cv::aruco::CharucoBoard::create(5, 7, 0.04f, 0.02f, dictionary);
+		cv::Ptr<cv::aruco::DetectorParameters> params = cv::aruco::DetectorParameters::create();
+		while (inputVideo.grab()) {
+			cv::Mat image;
+			cv::Mat imageCopy;
+			inputVideo.retrieve(image);
+			image.copyTo(imageCopy);
+			std::vector<int> markerIds;
+			std::vector<std::vector<cv::Point2f> > markerCorners;
+			cv::aruco::detectMarkers(image, board->dictionary, markerCorners, markerIds, params);
+			// if at least one marker detected
+			if (markerIds.size() > 0) {
+				cv::aruco::drawDetectedMarkers(imageCopy, markerCorners, markerIds);
+				std::vector<cv::Point2f> charucoCorners;
+				std::vector<int> charucoIds;
+				cv::aruco::interpolateCornersCharuco(markerCorners, markerIds, image, board, charucoCorners, charucoIds, _cam_real_intrinsic, _cam_real_dist_coeff);
+				// if at least one charuco corner detected
+				if (charucoIds.size() > 0) {
+					cv::Scalar color = cv::Scalar(255, 0, 0);
+					cv::aruco::drawDetectedCornersCharuco(imageCopy, charucoCorners, charucoIds, color);
+					cv::Vec3d rvec, tvec;
+					bool valid = cv::aruco::estimatePoseCharucoBoard(charucoCorners, charucoIds, board, _cam_real_intrinsic, _cam_real_dist_coeff, rvec, tvec);
+					// if charuco pose is valid
+					if (valid)
+						cv::drawFrameAxes(imageCopy, _cam_real_intrinsic, _cam_real_dist_coeff, rvec, tvec, 0.1f);
+				}
+			}
+			cv::imshow("out", imageCopy);
+			char key = (char)cv::waitKey(30);
+			if (key == 27)
+				//cv::destroyAllWindows();
+				break;
+			
+		}
+	}
+}
+
+bool CCamera::transform_charuco(VideoCapture vid, Mat im, vector <Vec3d> &rtvec)
+{
+	cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
+	cv::Ptr<cv::aruco::CharucoBoard> board = cv::aruco::CharucoBoard::create(5, 7, 0.04f, 0.02f, dictionary);
+	cv::Ptr<cv::aruco::DetectorParameters> params = cv::aruco::DetectorParameters::create();
+	vid.grab();
+	cv::Mat image;
+	cv::Mat imageCopy;
+	vid.retrieve(image);
+	//cv::flip(image, image, 1);
+	image.copyTo(im);
+	std::vector<int> markerIds;
+	std::vector<std::vector<cv::Point2f> > markerCorners;
+	cv::aruco::detectMarkers(image, board->dictionary, markerCorners, markerIds, params);
+	// if at least one marker detected
+	if (markerIds.size() > 0) {
+		cv::aruco::drawDetectedMarkers(im, markerCorners, markerIds);
+		std::vector<cv::Point2f> charucoCorners;
+		std::vector<int> charucoIds;
+		cv::aruco::interpolateCornersCharuco(markerCorners, markerIds, image, board, charucoCorners, charucoIds, _cam_real_intrinsic, _cam_real_dist_coeff);
+		// if at least one charuco corner detected
+		if (charucoIds.size() > 0) {
+			cv::Scalar color = cv::Scalar(255, 0, 0);
+			cv::aruco::drawDetectedCornersCharuco(im, charucoCorners, charucoIds, color);
+			cv::Vec3d rvec, tvec;
+			bool valid = cv::aruco::estimatePoseCharucoBoard(charucoCorners, charucoIds, board, _cam_real_intrinsic, _cam_real_dist_coeff, rvec, tvec);
+			// if charuco pose is valid
+			if (valid) {
+			cv::drawFrameAxes(im, _cam_real_intrinsic, _cam_real_dist_coeff, rvec, tvec, 0.1f);
+
+			// set board pose to sliders on GUI
+			_cam_setting_x = int(tvec[0] * 1000); // units in mm
+			_cam_setting_y = int(tvec[1] * 1000); // units in mm
+			_cam_setting_z = int(tvec[2] * 1000); // units in mm
+
+			rtvec.push_back(rvec);
+			rtvec.push_back(tvec);
+
+			return true;
+			}
+		}
+	}
+	return false;
+
+
+}
+
+Mat CCamera::get_intrinsic()
+{
+	return _cam_real_intrinsic;
+}
+
+Mat CCamera::get_extrinsic()
+{
+	return _cam_real_extrinsic;
+}
+

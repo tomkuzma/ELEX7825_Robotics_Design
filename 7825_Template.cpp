@@ -48,6 +48,23 @@ void lab3(int cam_id)
 
 void lab4(int cam_id)
 {
+    char exit_key = -1;
+    CCamera cam;
+    CRobot robot;
+
+    robot.create_aruco_robot();
+    robot.start_vidcap();
+
+    //cam.calibrate_board(cam_id);
+    //cam.detectCharucoBoardWithCalibrationPose();
+
+    while (exit_key != 'q')
+    {
+        robot.draw_aruco_robot();
+        exit_key = waitKey(10);
+    }
+
+    destroyAllWindows();
 
 }
 
