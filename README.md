@@ -13,6 +13,11 @@ Y=0 cm, Z=50 cm. Orient the pitch/roll/yaw angles for the camera such that it is
 - Link the trackbars X/Y/Z/R/P/Y/Focus to the virtual camera so changes in the trackbar values are
 automatically reflected in the virtual image.
 
+
+https://user-images.githubusercontent.com/77029857/195733483-b769f0de-441b-4cb4-afc3-94bc5bd1e533.mov
+
+
+
 # LAB 4 
 In this lab a webcam will be calibrated to determine the intrinsic parameters of the camera. The
 calibrated camera as well as ArUco fiducial markers will then be used to determine the extrinsic
