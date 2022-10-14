@@ -255,7 +255,7 @@ void CRobot::create_aruco_robot()
 
 void CRobot::draw_aruco_robot()
 {
-	float deg = 1;
+	float deg = 3;
 
 	_canvas = cv::Mat::zeros(_image_size, CV_8UC3) + CV_RGB(60, 60, 60);
 	Mat flipped;
@@ -275,9 +275,6 @@ void CRobot::draw_aruco_robot()
 
 	// update trackbars
 	_virtualcam.update_settings(_canvas);
-
-	// increment rotation
-	deg += 1;
 
 	cv::imshow(CANVAS_NAME, _canvas);
 }
