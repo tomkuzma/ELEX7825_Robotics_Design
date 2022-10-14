@@ -12,3 +12,13 @@ webcam image, a central critical point, focal length of 3 mm, and position the c
 Y=0 cm, Z=50 cm. Orient the pitch/roll/yaw angles for the camera such that it is point at the robot.
 - Link the trackbars X/Y/Z/R/P/Y/Focus to the virtual camera so changes in the trackbar values are
 automatically reflected in the virtual image.
+
+# LAB 4 
+In this lab a webcam will be calibrated to determine the intrinsic parameters of the camera. The
+calibrated camera as well as ArUco fiducial markers will then be used to determine the extrinsic
+parameters of the camera and by inverse, the pose of the ArUco board. The virtual robot created in the
+previous lab will then be transformed to the origin of the ArUco board coordinate system to create an
+augmented reality interface.
+
+https://user-images.githubusercontent.com/77029857/195733171-87891164-d6e4-4613-ae58-fe3d36e28225.mov
+
