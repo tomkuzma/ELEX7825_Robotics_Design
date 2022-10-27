@@ -7,6 +7,8 @@
 
 #include "cvui.h"
 
+//#define CAM_ON
+
 CRobot::CRobot()
 {
 	//////////////////////////////////////
@@ -22,6 +24,14 @@ CRobot::CRobot()
 
 	//uarm.init_com("COM4");
 	//uarm.init_robot();
+
+	//////////////////////
+	// init scara positions
+	q1 = 0;
+	q2 = 0;
+	q3 = 0;
+	_tip_height = 0;
+	_track_end = false;
 }
 
 CRobot::~CRobot()
@@ -112,15 +122,17 @@ void CRobot::drawBox(Mat& im, std::vector<Mat> box3d, Scalar colour)
 		Point pt1 = box2d.at(draw_box1[i]);
 		Point pt2 = box2d.at(draw_box2[i]);
 
-		line(im, pt1, pt2, colour, 1);
+		line(im, pt1, pt2, colour, 2);
 	}
 }
 
-void CRobot::drawBox2(Mat& im, std::vector <vector<Mat>> box3d, Scalar colour)
+bool CRobot::drawBox2(Mat& im, std::vector <vector<Mat>> box3d, Scalar colour)
 {
 	std::vector<Point2f> box2d;
 	std::vector <Point3f> box3dVec;
 	std::vector <Vec3d> r_tvect;
+
+	cv::Scalar colours[4] = { CV_RGB(255, 255, 255),CV_RGB(255, 0, 0) ,CV_RGB(0, 255, 0) ,CV_RGB(0, 0, 255) };
 
 	// The 12 lines connecting all vertexes 
 	float draw_box1[] = { 0,1,2,3,4,5,6,7,0,1,2,3 };
@@ -130,7 +142,7 @@ void CRobot::drawBox2(Mat& im, std::vector <vector<Mat>> box3d, Scalar colour)
 	{
 		Mat extrin_re = _virtualcam.get_extrinsic();
 		Mat intrin_re = _virtualcam.get_intrinsic();
-
+		//std::cout << intrin_re << "\n\n" << extrin_re << "\n\n";
 		for (int boxindex = 0; boxindex < box3d.size(); boxindex++)
 		{
 			// convert box3d Mat to Point3f
@@ -146,18 +158,39 @@ void CRobot::drawBox2(Mat& im, std::vector <vector<Mat>> box3d, Scalar colour)
 				Point pt1 = box2d.at(draw_box1[i]);
 				Point pt2 = box2d.at(draw_box2[i]);
 
-				line(im, pt1, pt2, colour, 2);
+				line(im, pt1, pt2, colours[boxindex % 4], 2);
 			}
 
 			box3dVec.clear(); // clear 3D point vector for next box
 		}
-
+		return true;
 	}
+	return false;
+}
 
+void CRobot::drawCoord_cam(Mat& im, std::vector<Mat> coord3d)
+{
+	std::vector<Point2f> box2d;
+	Mat extrin_re = _virtualcam.get_extrinsic();
+	Mat intrin_re = _virtualcam.get_intrinsic();
+
+	std::vector <Point3f> box3dVec;
+
+	// convert to vec3d
+	for (int pointindex = 0; pointindex < coord3d.size(); pointindex++)
+		box3dVec.push_back(Point3f{ coord3d.at(pointindex).at<float>(0),coord3d.at(pointindex).at<float>(1), coord3d.at(pointindex).at<float>(2) });
+
+	// transform 3D points to 2D on camera plane
+	projectPoints(box3dVec, _virtualcam._rvec, _virtualcam._tvec, intrin_re, extrin_re, box2d);
+
+	// connect points with lines
+	line(im, box2d.at(0), box2d.at(1), CV_RGB(255, 0, 0), 2); // X=RED
+	line(im, box2d.at(0), box2d.at(2), CV_RGB(0, 255, 0), 2); // Y=GREEN
+	line(im, box2d.at(0), box2d.at(3), CV_RGB(0, 0, 255), 2); // Z=BLUE
 }
 
 void CRobot::drawCoord(Mat& im, std::vector<Mat> coord3d)
-{
+	{
 	Point2f O, X, Y, Z;
 
 	// transform 3D points to 2D on camera plane
@@ -167,11 +200,11 @@ void CRobot::drawCoord(Mat& im, std::vector<Mat> coord3d)
 	_virtualcam.transform_to_image(coord3d.at(3), Z);
 
 	// connect points with lines
-	line(im, O, X, CV_RGB(255, 0, 0), 1); // X=RED
-	line(im, O, Y, CV_RGB(0, 255, 0), 1); // Y=GREEN
-	line(im, O, Z, CV_RGB(0, 0, 255), 1); // Z=BLUE
-	
-}
+	line(im, O, X, CV_RGB(255, 0, 0), 2); // X=RED
+	line(im, O, Y, CV_RGB(0, 255, 0), 2); // Y=GREEN
+	line(im, O, Z, CV_RGB(0, 0, 255), 2); // Z=BLUE
+
+	}
 
 void CRobot::start_vidcap()
 {
@@ -230,6 +263,7 @@ void CRobot::draw_simple_robot()
 
 }
 
+// LAB 4 /////////////////////////////////////////////////////////////
 void CRobot::create_aruco_robot()
 {
 	// create 5 boxes for robot
@@ -258,7 +292,6 @@ void CRobot::draw_aruco_robot()
 	float deg = 3;
 
 	_canvas = cv::Mat::zeros(_image_size, CV_8UC3) + CV_RGB(60, 60, 60);
-	Mat flipped;
 
 	// rotate boxes
 	transformPoints(_simple_robot.at(0), createHT(Vec3d(0, 0, 0), Vec3d(0, 0, deg)));
@@ -278,3 +311,201 @@ void CRobot::draw_aruco_robot()
 
 	cv::imshow(CANVAS_NAME, _canvas);
 }
+
+/// LAB 5 /////////////////////////////////////
+void CRobot::create_scara_robot()
+{
+	_simple_robot.clear();
+
+	// create 4 boxes for robot
+	std::vector <Mat> base = createBox(0.05, 0.15, 0.05);
+	std::vector <Mat> first = createBox(0.15, 0.05, 0.05);
+	std::vector <Mat> second = createBox(0.15, 0.05, 0.05);
+	std::vector <Mat> third = createBox(0.15, 0.05, 0.05);
+
+	// transform boxes to their positions
+	transformPoints(base, createHT(Vec3d(0, 0.075, 0), Vec3d(0, 0, 0)));
+	transformPoints(first, createHT(Vec3d(0.075, 0, 0), Vec3d(0, 0, 0)));
+	transformPoints(second, createHT(Vec3d(0.075, 0, 0), Vec3d(0, 0, 0)));
+	transformPoints(third, createHT(Vec3d(-0.075, 0, 0), Vec3d(0, 0, 0)));
+
+	// push onto Mat vector member
+	_simple_robot.push_back(base);
+	_simple_robot.push_back(first);
+	_simple_robot.push_back(second);
+	_simple_robot.push_back(third);
+}
+
+void CRobot::draw_scara_robot()
+{
+	// Create BG mat
+	_canvas = cv::Mat::zeros(_image_size, CV_8UC3) + CV_RGB(60, 60, 60);
+
+	//if (is_param_changed())
+	//	{
+		create_scara_robot();
+
+		// create coordinates
+		std::vector<Mat> O = createCoord();
+		std::vector<Mat> OA = createCoord();
+		std::vector<Mat> OB = createCoord();
+		std::vector<Mat> OC = createCoord();
+		std::vector<Mat> OD = createCoord();
+		std::vector<Mat> EFF = createCoord();
+
+		Mat WTA, ATB, BTC, CTD, WTB, WTC, WTD, W;
+
+		(_virtualcam._camera_on) ? W = createHT(Vec3d(0, 0, 0), Vec3d(90, 0, 0)) : W = createHT(Vec3d(0, 0, 0), Vec3d(0, 0, 0));
+
+		WTA = createHT(Vec3d(0, 0.175, 0), Vec3d(0, q1, 0));
+		ATB = createHT(Vec3d(0.15, 0, 0), Vec3d(0, q2, 0));
+		BTC = createHT(Vec3d(0.15, 0, 0), Vec3d(0, 0, -90));
+		CTD = createHT(Vec3d((float)_tip_height / 1000 + 0.025, 0.025, 0), Vec3d(q3, 0, 0));
+
+		WTA = W * WTA;
+		WTB = WTA * ATB;
+		WTC = WTA * ATB * BTC;
+		WTD = WTA * ATB * BTC * CTD;
+
+		transformPoints(O, W);
+		transformPoints(OA, WTA);
+		transformPoints(OB, WTB);
+		transformPoints(OC, WTC);
+		transformPoints(OD, WTD);
+
+		// Transform Robot Parts
+		transformPoints(_simple_robot.at(0), W);
+		transformPoints(_simple_robot.at(1), WTA);
+		transformPoints(_simple_robot.at(2), WTB);
+		transformPoints(_simple_robot.at(3), WTD);
+		//}
+
+		if (_virtualcam._camera_on) {
+
+			// draw coordinate
+			if (drawBox2(_canvas, _simple_robot, CV_RGB(255, 0, 0)))
+				{
+				//drawCoord_cam(_canvas, O);
+				drawCoord_cam(_canvas, OA);
+				drawCoord_cam(_canvas, OB);
+				drawCoord_cam(_canvas, OC);
+				drawCoord_cam(_canvas, OD);
+				}
+
+			_eff_x = int(OD.at(0).at<float>(0) * 1000);
+			_eff_y = int(OD.at(0).at<float>(1) * 1000);
+			_eff_z = int(OD.at(0).at<float>(2) * 1000);
+
+			// calculate end effector pose angle
+			Mat Reverse = createHT(Vec3d(float(_eff_x) / 1000, float(_eff_y) / 1000, float(_eff_z) / 1000), Vec3d(0, 0, 0));
+			transformPoints(OD, Reverse.inv());
+			_eff_theta = atan2(OD.at(2).at<float>(1), OD.at(2).at<float>(0)) * 180 / 3.14159;
+
+
+			flip(_canvas, _canvas, 1);
+			}
+		else {
+			// draw robot boxes
+			drawBox(_canvas, _simple_robot.at(0), CV_RGB(255, 255, 255));
+			drawBox(_canvas, _simple_robot.at(1), CV_RGB(0, 255, 0));
+			drawBox(_canvas, _simple_robot.at(2), CV_RGB(0, 0, 255));
+			drawBox(_canvas, _simple_robot.at(3), CV_RGB(255, 0, 0));
+
+			// draw coorditate
+			drawCoord(_canvas, O);
+			drawCoord(_canvas, OA);
+			drawCoord(_canvas, OB);
+			drawCoord(_canvas, OC);
+			drawCoord(_canvas, OD);
+
+			_eff_x = int(OD.at(0).at<float>(0) * 1000);
+			_eff_y = int(OD.at(0).at<float>(1) * 1000);
+			_eff_z = int(OD.at(0).at<float>(2) * 1000);
+
+			// calculate end effector pose angle
+			Mat Reverse = createHT(Vec3d(float(_eff_x) / 1000, float(_eff_y) / 1000, float(_eff_z) / 1000), Vec3d(0, 0, 0));
+			transformPoints(OD, Reverse.inv());
+			_eff_theta = atan2(OD.at(2).at<float>(2), OD.at(2).at<float>(0)) * 180 / 3.14159;
+			}
+
+		/*transformPoints(EFF, createHT(Vec3d(0, 0.175, 0), Vec3d(0, 0, 0)) * fkine());
+		drawCoord(_canvas, EFF);*/
+
+
+
+
+	// update camera
+	_virtualcam.update_settings(_canvas, q1, q2, q3, _tip_height);
+	update_endeff_window();
+
+	// show image in window
+	cv::imshow(CANVAS_NAME, _canvas);
+
+}
+
+Mat CRobot::fkine()
+	{
+	const double conv = 3.14159265358979323846 / 180;
+	return ((Mat1f(4, 4) << cos(q3*conv) * (cos(q1 * conv) * cos(q2 * conv) - sin(q1 * conv) * sin(q2 * conv)) - sin(q3 * conv) * (cos(q1 * conv) * sin(q2 * conv) + cos(q2 * conv) * sin(q1 * conv)), 0, cos(q3 * conv) * (cos(q1 * conv) * sin(q2 * conv) + cos(q2 * conv) * sin(q1 * conv)) + sin(q3 * conv) * (cos(q1 * conv) * cos(q2 * conv) - sin(q1 * conv) * sin(q2 * conv)), (3 * cos(q1 * conv)) / 20 + (7 * cos(q1 * conv) * cos(q2 * conv)) / 40 - (7 * sin(q1 * conv) * sin(q2 * conv)) / 40,
+									0, 1, 0, -float(_tip_height)/1000,
+		-cos(q3 * conv) * (cos(q1 * conv) * sin(q2 * conv) + cos(q2 * conv) * sin(q1 * conv)) - sin(q3 * conv) * (cos(q1) * conv * cos(q2 * conv) - sin(q1 * conv) * sin(q2 * conv)), 0, cos(q3 * conv) * (cos(q1 * conv) * cos(q2 * conv) - sin(q1 * conv) * sin(q2 * conv)) - sin(q3 * conv) * (cos(q1 * conv) * sin(q2 * conv) + cos(q2 * conv) * sin(q1 * conv)), -(3 * sin(q1 * conv)) / 20 - (7 * cos(q1 * conv) * sin(q2 * conv)) / 40 - (7 * cos(q2 * conv) * sin(q1 * conv)) / 40,
+		0, 0, 0, 1
+		));
+	}
+
+bool CRobot::is_param_changed()
+	{
+	static int th_old = -1, q1_old = -1, q2_old = -1, q3_old = -1;
+
+	if ((_tip_height != th_old) || (q1 != q1_old) || (q2 != q2_old) || (q3 != q3_old)) {
+		th_old = _tip_height;
+		q1_old = q1;
+		q2_old = q2;
+		q3_old = q3;
+		return true;
+		}
+	else 
+		return false;
+	}
+
+void CRobot::update_endeff_window()
+	{
+	// Pose window 
+	Point _eff_window;
+	_eff_window.x = _canvas.cols - 200;
+	_eff_window.y = 300;
+
+	cvui::window(_canvas, _eff_window.x, _eff_window.y, 200, 250, "End Effector");
+
+	_eff_window.x += 5;;
+	_eff_window.y += 20;
+	cvui::trackbar(_canvas, _eff_window.x, _eff_window.y, 180, &_eff_x, -400, 400);
+	cvui::text(_canvas, _eff_window.x + 180, _eff_window.y + 20, "X");
+
+	_eff_window.y += 45;
+	cvui::trackbar(_canvas, _eff_window.x, _eff_window.y, 180, &_eff_y, -400, 400);
+	cvui::text(_canvas, _eff_window.x + 180, _eff_window.y + 20, "Y");
+
+	_eff_window.y += 45;
+	cvui::trackbar(_canvas, _eff_window.x, _eff_window.y, 180, &_eff_z, -400, 400);
+	cvui::text(_canvas, _eff_window.x + 180, _eff_window.y + 20, "Z");
+
+	_eff_window.y += 45;
+	cvui::trackbar(_canvas, _eff_window.x, _eff_window.y, 180, &_eff_theta, -180, 180);
+	cvui::text(_canvas, _eff_window.x + 180, _eff_window.y + 20, "Rot");
+
+	//_pose_window.x -= 50;
+	_eff_window.y += 50;
+	cvui::checkbox(_canvas, _eff_window.x, _eff_window.y, "Joint Control", &_track_end);
+
+	}
+
+Point2f CRobot::ikine(float x, float y)
+	{
+	float theta1 = 2 * atan2((4 * pow(x, 2) + 120 * x + 4 * pow(y, 2) - 325),(120 * y + sqrt(-16 * pow(x,4) - 32 * pow(x,2) * pow(y,2) + 17000 * pow(x,2) - 16 * pow(y,4) + 17000 * pow(y,2) - 105625)));
+
+
+	float theta2 = -2 * atan2((4 * pow(x, 2) + 4 * pow(y, 2) - 25), sqrt(-(4 * pow(x, 2) + 4 * pow(y, 2) - 25) * (4 * pow(x, 2) + 4 * pow(y, 2) - 4225)));
+
+	return Point2f(theta1,theta2);
+	}

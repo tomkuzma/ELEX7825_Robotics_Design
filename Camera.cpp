@@ -50,6 +50,9 @@ void CCamera::init (Size image_size)
 	calculate_extrinsic();
 
 	load_camparam("cam_param.xml", _cam_real_intrinsic, _cam_real_dist_coeff);
+
+	_animate_flg = false;
+	_camera_on = false;
 }
 
 void CCamera::calculate_intrinsic()
@@ -387,6 +390,141 @@ void CCamera::update_settings(Mat &im)
 	calculate_extrinsic();
 }
 
+void CCamera::update_settings(Mat& im, int &j0, int &j1, int &j2, int &j3)
+	{
+	static int STATE = 0; 
+	bool track_board = false;
+	Point _camera_setting_window;
+
+	cvui::window(im, _camera_setting_window.x, _camera_setting_window.y, 200, 350, "Camera Settings");
+
+	_camera_setting_window.x = 5;
+	_camera_setting_window.y = 20;
+	cvui::trackbar(im, _camera_setting_window.x, _camera_setting_window.y, 180, &_cam_setting_f, 1, 20);
+	cvui::text(im, _camera_setting_window.x + 180, _camera_setting_window.y + 20, "F");
+
+	_camera_setting_window.y += 45;
+	cvui::trackbar(im, _camera_setting_window.x, _camera_setting_window.y, 180, &_cam_setting_x, -500, 500);
+	cvui::text(im, _camera_setting_window.x + 180, _camera_setting_window.y + 20, "X");
+
+	_camera_setting_window.y += 45;
+	cvui::trackbar(im, _camera_setting_window.x, _camera_setting_window.y, 180, &_cam_setting_y, -500, 500);
+	cvui::text(im, _camera_setting_window.x + 180, _camera_setting_window.y + 20, "Y");
+
+	_camera_setting_window.y += 45;
+	cvui::trackbar(im, _camera_setting_window.x, _camera_setting_window.y, 180, &_cam_setting_z, -500, 500);
+	cvui::text(im, _camera_setting_window.x + 180, _camera_setting_window.y + 20, "Z");
+
+	_camera_setting_window.y += 45;
+	cvui::trackbar(im, _camera_setting_window.x, _camera_setting_window.y, 180, &_cam_setting_roll, -180, 180);
+	cvui::text(im, _camera_setting_window.x + 180, _camera_setting_window.y + 20, "R");
+
+	_camera_setting_window.y += 45;
+	cvui::trackbar(im, _camera_setting_window.x, _camera_setting_window.y, 180, &_cam_setting_pitch, -180, 180);
+	cvui::text(im, _camera_setting_window.x + 180, _camera_setting_window.y + 20, "P");
+
+	_camera_setting_window.y += 45;
+	cvui::trackbar(im, _camera_setting_window.x, _camera_setting_window.y, 180, &_cam_setting_yaw, -180, 180);
+	cvui::text(im, _camera_setting_window.x + 180, _camera_setting_window.y + 20, "Y");
+
+	_camera_setting_window.y += 45;
+	cvui::checkbox(im, _camera_setting_window.x, _camera_setting_window.y, "Track Board", &track_board);
+
+	_camera_setting_window.y += 45;
+	if (cvui::button(im, _camera_setting_window.x, _camera_setting_window.y, 100, 30, "Reset"))
+		{
+		init(im.size());
+		}
+
+	// Pose window 
+	Point _pose_window;
+	_pose_window.x = im.cols - 200;
+	_pose_window.y = 0;
+
+	cvui::window(im, _pose_window.x, _pose_window.y, 200, 300, "Pose Settings");
+
+	_pose_window.x += 5;;
+	_pose_window.y += 20;
+	cvui::trackbar(im, _pose_window.x, _pose_window.y, 180, &j0, -180, 180);
+	cvui::text(im, _pose_window.x + 180, _pose_window.y + 20, "j0");
+
+	_pose_window.y += 45;
+	cvui::trackbar(im, _pose_window.x, _pose_window.y, 180, &j1, -180, 180);
+	cvui::text(im, _pose_window.x + 180, _pose_window.y + 20, "j1");
+
+	_pose_window.y += 45;
+	cvui::trackbar(im, _pose_window.x, _pose_window.y, 180, &j2, -180, 180);
+	cvui::text(im, _pose_window.x + 180, _pose_window.y + 20, "j2");
+
+	_pose_window.y += 45;
+	cvui::trackbar(im, _pose_window.x, _pose_window.y, 180, &j3, 0, 150);
+	cvui::text(im, _pose_window.x + 180, _pose_window.y + 20, "j3");
+
+	_pose_window.y += 50;
+	// reset pose
+	if (cvui::button(im, _pose_window.x, _pose_window.y, 100, 30, "Reset"))
+		{
+		j0 = 0;
+		j1 = 0;
+		j2 = 0;
+		j3 = 0;
+		}
+
+	// animate joints
+	if (cvui::button(im, _pose_window.x + 100, _pose_window.y, 100, 30, "Animate"))
+		{
+		_animate_flg = true;
+		j0 = 0;
+		j1 = 0;
+		j2 = 0;
+		j3 = 0;
+		STATE = 0;
+		}
+
+	//_pose_window.x -= 50;
+	_pose_window.y += 45;
+	cvui::checkbox(im, _pose_window.x, _pose_window.y, "Camera On", &_camera_on);
+
+	// do animation with FSM
+	if (_animate_flg) {
+		switch (STATE)
+			{
+			case 0: (j0 != 180) ? j0+=5 : STATE++;
+				break;
+			case 1: (j0 != -180) ? j0-=5 : STATE++;
+				break;
+			case 2: (j0 != 0) ? j0+=5 : STATE++;
+				break;
+			case 3: (j1 != 180) ? j1+=5 : STATE++;
+				break;
+			case 4: (j1 != -180) ? j1-=5 : STATE++;
+				break;
+			case 5: (j1 != 0) ? j1+=5 : STATE++;
+				break;
+			case 6: (j2 != 360) ? j2+=5 : STATE++;
+				break;
+			case 7: (j3 != 150) ? j3+=5 : STATE++;
+				break;
+			case 8: (j3 != 0) ? j3-=5 : STATE++;
+				break;
+			default: _animate_flg = false;
+				break;
+			}
+
+
+		}
+
+	cvui::update();
+
+	//////////////////////////////
+	// Update camera model
+	/*_cam_setting_pitch++;
+	_cam_setting_roll++;
+	_cam_setting_yaw++;*/
+	calculate_intrinsic();
+	calculate_extrinsic();
+	}
+
 void CCamera::detectCharucoBoardWithCalibrationPose()
 {
 	cv::VideoCapture inputVideo;
@@ -439,7 +577,7 @@ void CCamera::detectCharucoBoardWithCalibrationPose()
 	}
 }
 
-bool CCamera::transform_charuco(VideoCapture vid, Mat im, vector <Vec3d> &rtvec)
+bool CCamera::transform_charuco(VideoCapture vid, Mat &im, vector <Vec3d> &rtvec)
 {
 	cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
 	cv::Ptr<cv::aruco::CharucoBoard> board = cv::aruco::CharucoBoard::create(5, 7, 0.04f, 0.02f, dictionary);
@@ -476,6 +614,9 @@ bool CCamera::transform_charuco(VideoCapture vid, Mat im, vector <Vec3d> &rtvec)
 
 			rtvec.push_back(rvec);
 			rtvec.push_back(tvec);
+
+			_rvec = rvec;
+			_tvec = tvec;
 
 			return true;
 			}

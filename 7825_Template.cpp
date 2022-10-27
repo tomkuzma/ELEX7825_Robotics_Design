@@ -70,7 +70,18 @@ void lab4(int cam_id)
 
 void lab5(int cam_id)
 {
-  
+    char exit_key = -1;
+    CRobot robot;
+
+    robot.start_vidcap();
+    robot.create_scara_robot();
+
+    while (exit_key != 'q')
+    {
+        robot.draw_scara_robot();
+        exit_key = waitKey(10);
+    }
+    destroyAllWindows();
 }
 
 void lab6(int cam_id)

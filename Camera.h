@@ -12,7 +12,7 @@ class CCamera
 public:
 	CCamera();
 	~CCamera();
-
+	Vec3d _rvec, _tvec;
 private:
 	// Virtual Camera
 	float _pixel_size;
@@ -40,6 +40,8 @@ public:
 	Mat _cam_real_extrinsic;
 	Mat _cam_real_dist_coeff;
 
+	bool _animate_flg, _camera_on;
+
 	void init(Size image_size);
 
 	bool save_camparam(string filename, Mat& cam, Mat& dist);
@@ -49,13 +51,16 @@ public:
 	void calibrate_board(int cam_id);
 
 	void transform_to_image(Mat pt3d_mat, Point2f& pt);
+	void transform_to_image_cam(Mat pt3d_mat, Point2f& pt);
 	void transform_to_image(std::vector<Mat> pts3d_mat, std::vector<Point2f>& pts2d);
 
 	void update_settings(Mat &im);
 
+	void update_settings(Mat& im, int& j0, int& j1, int& j2, int& j3);
+
 	void detectCharucoBoardWithCalibrationPose();
 
-	bool transform_charuco(VideoCapture vid, Mat im, vector <Vec3d> &rtvec);
+	bool transform_charuco(VideoCapture vid, Mat &im, vector <Vec3d> &rtvec);
 
 	Mat get_intrinsic();
 	Mat get_extrinsic();
