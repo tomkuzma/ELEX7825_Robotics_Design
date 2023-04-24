@@ -27,3 +27,9 @@ augmented reality interface.
 
 https://user-images.githubusercontent.com/77029857/195733171-87891164-d6e4-4613-ae58-fe3d36e28225.mov
 
+# LAB 5
+This Lab implements the use of forward kinematics.
+
+
+https://user-images.githubusercontent.com/77029857/234094663-e658508f-df1b-4c80-a8c7-ca516957986a.mov
+
